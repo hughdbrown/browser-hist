@@ -71,7 +71,7 @@ impl From<rusqlite::Error> for CustomError {
 }
 
 fn get_matches() -> ArgMatches {
-    let matches: ArgMatches = Command::new("chrome-history-search")
+    Command::new("chrome-history-search")
         .version("1.0")
         .about("Search Chrome browser history on macOS")
         .arg(Arg::new("start-date")
@@ -88,9 +88,7 @@ fn get_matches() -> ArgMatches {
             .long("url")
             .short('u')
             .help("Domain or text to search for in the URL"))
-        .get_matches();
-
-    matches
+        .get_matches()
 }
 
 fn build_sql(matches: &ArgMatches)
