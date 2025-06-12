@@ -1,6 +1,6 @@
 //use std::error::Error as StdError;
 use std::fmt::{
-    //Display,
+    Display,
     Debug,
 };
 use std::fs;
@@ -34,11 +34,14 @@ impl Row {
     fn new(url: String, title: String, visit_count: i32, last_visit_time: i64) -> Self {
         Row { url, title, visit_count, last_visit_time }
     }
+}
 
-    fn format_row(&self) -> String {
+impl Display for Row {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let dt: NaiveDateTime = chrome_time_to_naive(self.last_visit_time);
-        format!(
-            "[{}] {} ({} visits)\n    {}\n",
+        write!(
+            f,
+            "[{}] {} ({} visits)\n    {}",
             dt.format("%Y-%m-%d %H:%M:%S"),
             self.title,
             self.visit_count,
@@ -196,7 +199,7 @@ fn get_rows(
 
 fn print_rows(rows: &[Row]) {
     for row in rows {
-        print!("{}", row.format_row());
+        println!("{}", row);
     }
 }
 
