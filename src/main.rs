@@ -93,24 +93,12 @@ fn get_matches() -> ArgMatches {
     matches
 }
 
-
-
-fn main() -> Result<(), CustomError> {
-    let matches: ArgMatches = get_matches();
-
-    // Get Chrome history path
-    let home = std::env::var("HOME").expect("Could not determine home directory");
-    let mut history_path = PathBuf::from(home);
-    history_path.push("Library/Application Support/Google/Chrome/Default/History");
-
-    let temp_file = NamedTempFile::new()?;
-    fs::copy(history_path, temp_file.path())?;
-
-    let conn = Connection::open_with_flags(
-        temp_file.path(),
-        OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )?;
-
+fn build_sql(matches: &ArgMatches)
+-> (
+    String,
+    Vec<Box<dyn rusqlite::ToSql>>
+)
+{
     // Build SQL query
     let mut query = String::from("SELECT url, title, visit_count, last_visit_time FROM urls WHERE 1=1");
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -160,6 +148,26 @@ fn main() -> Result<(), CustomError> {
     }
 
     query.push_str(" ORDER BY last_visit_time DESC LIMIT 100");
+
+    (query, params_vec)
+}
+
+fn main() -> Result<(), CustomError> {
+    let matches: ArgMatches = get_matches();
+    let (query, params_vec) = build_sql(&matches);
+
+    // Get Chrome history path
+    let home = std::env::var("HOME").expect("Could not determine home directory");
+    let mut history_path = PathBuf::from(home);
+    history_path.push("Library/Application Support/Google/Chrome/Default/History");
+
+    let temp_file = NamedTempFile::new()?;
+    fs::copy(history_path, temp_file.path())?;
+
+    let conn = Connection::open_with_flags(
+        temp_file.path(),
+        OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )?;
 
     let mut stmt = conn.prepare(&query)?;
     let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| &**b).collect();
