@@ -4,11 +4,12 @@ use std::fmt::{
     Debug,
 };
 use std::fs;
-use tempfile::NamedTempFile;
-
+use std::path::PathBuf;
 //use std::fmt::Error;
 // use std::io::Error;
 //use core::error::Error;
+
+use tempfile::NamedTempFile;
 
 use clap::{
     Arg,
@@ -27,7 +28,6 @@ use chrono::{
     NaiveDate, NaiveDateTime,
     // TimeZone, Utc,
 };
-use std::path::PathBuf;
 
 
 fn parse_date(s: &str) -> Option<NaiveDate> {
