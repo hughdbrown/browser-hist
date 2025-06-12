@@ -29,7 +29,7 @@ use chrono::{
     // TimeZone, Utc,
 };
 
-/**
+#[derive(Debug)]
 struct Row {
     url: String,
     title: String,
@@ -39,10 +39,20 @@ struct Row {
 
 impl Row {
     fn new(url: String, title: String, visit_count: i32, last_visit_time: i64) -> Self {
-        Row {url, title, visit_count, last_visit_time}
+        Row { url, title, visit_count, last_visit_time }
+    }
+
+    fn format_row(&self) -> String {
+        let dt: NaiveDateTime = chrome_time_to_naive(self.last_visit_time);
+        format!(
+            "[{}] {} ({} visits)\n    {}\n",
+            dt.format("%Y-%m-%d %H:%M:%S"),
+            self.title,
+            self.visit_count,
+            self.url
+        )
     }
 }
-**/
 
 fn parse_date(s: &str) -> Option<NaiveDate> {
     let date = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
@@ -164,29 +174,17 @@ fn build_sql(matches: &ArgMatches)
     (query, params_vec)
 }
 
-fn main() -> Result<(), CustomError> {
-    let matches: ArgMatches = get_matches();
-    let (query, params_vec) = build_sql(&matches);
-
-    // Get Chrome history path
-    let home = std::env::var("HOME").expect("Could not determine home directory");
-    let mut history_path = PathBuf::from(home);
-    history_path.push("Library/Application Support/Google/Chrome/Default/History");
-
-    let temp_file = NamedTempFile::new()?;
-    fs::copy(history_path, temp_file.path())?;
-
-    let conn = Connection::open_with_flags(
-        temp_file.path(),
-        OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )?;
-
-    let mut stmt = conn.prepare(&query)?;
+fn get_rows(
+    conn: &Connection,
+    query: &str,
+    params_vec: &[Box<dyn rusqlite::ToSql>]
+) -> Result<Vec<Row>, CustomError> {
+    let mut stmt: rusqlite::Statement = conn.prepare(query)?;
     let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| &**b).collect();
-    let rows = stmt.query_map(
+    let row_iter = stmt.query_map(
         params.as_slice(),
         |row| {
-            Ok((
+            Ok(Row::new(
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, i32>(2)?,
@@ -195,17 +193,40 @@ fn main() -> Result<(), CustomError> {
         }
     )?;
 
-    for row in rows {
-        let (url, title, visit_count, last_visit_time) = row?;
-        let dt = chrome_time_to_naive(last_visit_time);
-        println!(
-            "[{}] {} ({} visits)\n    {}\n",
-            dt.format("%Y-%m-%d %H:%M:%S"),
-            title,
-            visit_count,
-            url
-        );
+    let mut rows: Vec<Row> = Vec::new();
+    for row_result in row_iter {
+        let row: Row = row_result?;
+        rows.push(row);
     }
+
+    Ok(rows)
+}
+
+fn print_rows(rows: &[Row]) {
+    for row in rows {
+        print!("{}", row.format_row());
+    }
+}
+
+fn main() -> Result<(), CustomError> {
+    let matches: ArgMatches = get_matches();
+    let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = build_sql(&matches);
+
+    // Get Chrome history path
+    let home: String = std::env::var("HOME").expect("Could not determine home directory");
+    let mut history_path: PathBuf = PathBuf::from(home);
+    history_path.push("Library/Application Support/Google/Chrome/Default/History");
+
+    let temp_file: NamedTempFile = NamedTempFile::new()?;
+    fs::copy(history_path, temp_file.path())?;
+
+    let conn: Connection = Connection::open_with_flags(
+        temp_file.path(),
+        OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )?;
+
+    let rows: Vec<Row> = get_rows(&conn, &query, &params_vec)?;
+    print_rows(&rows);
 
     Ok(())
 }
