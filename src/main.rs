@@ -12,6 +12,7 @@ use tempfile::NamedTempFile;
 
 use clap::{
     Arg,
+    ArgMatches,
     Command,
     // Parser,
 };
@@ -34,7 +35,6 @@ fn parse_date(s: &str) -> Option<NaiveDate> {
     Some(date)
 }
 
-
 /// Converts a chrono NaiveDate to Chrome's timestamp (microseconds since 1601-01-01T00:00:00Z)
 fn date_to_chrome_time(date: NaiveDate) -> i64 {
     // Chrome epoch: 1601-01-01T00:00:00Z
@@ -54,7 +54,6 @@ fn chrome_time_to_naive(ts: i64) -> NaiveDateTime {
 // std::error::Error, std::fmt::Display, and std::fmt::Debug
 #[derive(Debug)]
 enum CustomError {
-    //Std(StdError),
     Rus(rusqlite::Error),
     Io(std::io::Error),
 }
@@ -71,8 +70,8 @@ impl From<rusqlite::Error> for CustomError {
     }
 }
 
-fn main() -> Result<(), CustomError> {
-    let matches = Command::new("chrome-history-search")
+fn get_matches() -> ArgMatches {
+    let matches: ArgMatches = Command::new("chrome-history-search")
         .version("1.0")
         .about("Search Chrome browser history on macOS")
         .arg(Arg::new("start-date")
@@ -90,6 +89,14 @@ fn main() -> Result<(), CustomError> {
             .short('u')
             .help("Domain or text to search for in the URL"))
         .get_matches();
+
+    matches
+}
+
+
+
+fn main() -> Result<(), CustomError> {
+    let matches: ArgMatches = get_matches();
 
     // Get Chrome history path
     let home = std::env::var("HOME").expect("Could not determine home directory");
