@@ -1,0 +1,20 @@
+Write a Rust program for the Mac for searching the Chrome browser history
+- The Chrome browser history file is at "~/Library/Application Support/Google/Chrome/Default/History".
+- The Chrome browser history file is a sqlite file.
+- The main table of the sqlite file is `urls`. The schema of `urls` in the sqlite file is:
+```
+id: INTEGER PRIMARY KEY - A unique identifier for each URL.
+url: LONGVARCHAR - The URL itself.
+title: LONGVARCHAR - The title of the visited webpage.
+visit_count: INTEGER DEFAULT 0 NOT NULL - The number of times this specific URL has been visited.
+typed_count: INTEGER - The number of times the user reached this URL by typing it into the address bar.
+last_visit_time: INTEGER - A timestamp indicating the last time the URL was visited, stored in nanoseconds.
+```
+Each row in `urls` describes a visited url.
+
+- Use the Rust `clap` crate for command line options.
+- Required command line options:
+-- `date-range` to search within a start date and end date. This will be compared to `urls.last_visit_time`.
+-- `search` to search for text in the `urls.title`
+-- `url` to search for the domain of `urls.url`
+
