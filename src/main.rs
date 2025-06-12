@@ -29,6 +29,20 @@ use chrono::{
     // TimeZone, Utc,
 };
 
+/**
+struct Row {
+    url: String,
+    title: String,
+    visit_count: i32,
+    last_visit_time: i64,
+}
+
+impl Row {
+    fn new(url: String, title: String, visit_count: i32, last_visit_time: i64) -> Self {
+        Row {url, title, visit_count, last_visit_time}
+    }
+}
+**/
 
 fn parse_date(s: &str) -> Option<NaiveDate> {
     let date = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
