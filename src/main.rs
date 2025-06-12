@@ -26,6 +26,30 @@ const CHROME_HISTORY_PATH: &str = "Library/Application Support/Google/Chrome/Def
 const QUERY_LIMIT: i32 = 100;
 const BASE_QUERY: &str = "SELECT url, title, visit_count, last_visit_time FROM urls WHERE 1=1";
 
+mod chrome_time {
+    use chrono::{NaiveDate, NaiveDateTime};
+
+    /// Chrome epoch: 1601-01-01T00:00:00Z
+    const CHROME_EPOCH: NaiveDateTime = match NaiveDate::from_ymd_opt(1601, 1, 1) {
+        Some(date) => match date.and_hms_opt(0, 0, 0) {
+            Some(datetime) => datetime,
+            None => panic!("Invalid time"),
+        },
+        None => panic!("Invalid date"),
+    };
+
+    /// Converts a chrono NaiveDate to Chrome's timestamp (microseconds since 1601-01-01T00:00:00Z)
+    pub fn from_date(date: NaiveDate) -> i64 {
+        let duration = date.and_hms_opt(0, 0, 0).unwrap() - CHROME_EPOCH;
+        duration.num_microseconds().unwrap()
+    }
+
+    /// Converts Chrome's timestamp to chrono NaiveDateTime
+    pub fn to_datetime(ts: i64) -> NaiveDateTime {
+        CHROME_EPOCH + chrono::Duration::microseconds(ts)
+    }
+}
+
 #[derive(Debug)]
 struct Row {
     url: String,
@@ -42,7 +66,7 @@ impl Row {
 
 impl Display for Row {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let dt: NaiveDateTime = chrome_time_to_naive(self.last_visit_time);
+        let dt: NaiveDateTime = chrome_time::to_datetime(self.last_visit_time);
         write!(
             f,
             "[{}] {} ({} visits)\n    {}",
@@ -59,21 +83,6 @@ fn parse_date(s: &str) -> Option<NaiveDate> {
     Some(date)
 }
 
-/// Converts a chrono NaiveDate to Chrome's timestamp (microseconds since 1601-01-01T00:00:00Z)
-fn date_to_chrome_time(date: NaiveDate) -> i64 {
-    // Chrome epoch: 1601-01-01T00:00:00Z
-    let chrome_epoch = NaiveDate::from_ymd_opt(1601, 1, 1).unwrap()
-        .and_hms_opt(0, 0, 0).unwrap();
-    let duration = date.and_hms_opt(0, 0, 0).unwrap() - chrome_epoch;
-    duration.num_microseconds().unwrap()
-}
-
-/// Converts Chrome's timestamp to chrono NaiveDateTime
-fn chrome_time_to_naive(ts: i64) -> NaiveDateTime {
-    let chrome_epoch = NaiveDate::from_ymd_opt(1601, 1, 1).unwrap()
-        .and_hms_opt(0, 0, 0).unwrap();
-    chrome_epoch + chrono::Duration::microseconds(ts)
-}
 
 #[derive(Debug)]
 enum CustomError {
@@ -131,10 +140,10 @@ fn build_sql(matches: &ArgMatches)
         (Some(sd), Some(ed)) => {
             let sd: Option<NaiveDate> = parse_date(sd.as_str());
             let sd: NaiveDate = sd.unwrap();
-            let start_ts = date_to_chrome_time(sd);
+            let start_ts = chrome_time::from_date(sd);
             let ed: Option<NaiveDate> = parse_date(ed.as_str());
             let ed: NaiveDate = ed.unwrap();
-            let end_ts = date_to_chrome_time(ed);
+            let end_ts = chrome_time::from_date(ed);
             query.push_str(" AND last_visit_time BETWEEN ? AND ?");
             params_vec.push(Box::new(start_ts));
             params_vec.push(Box::new(end_ts));
@@ -142,14 +151,14 @@ fn build_sql(matches: &ArgMatches)
         (Some(sd), None) => {
             let sd: Option<NaiveDate> = parse_date(sd.as_str());
             let sd: NaiveDate = sd.unwrap();
-            let start_ts = date_to_chrome_time(sd);
+            let start_ts = chrome_time::from_date(sd);
             query.push_str(" AND last_visit_time >= ?");
             params_vec.push(Box::new(start_ts));
         },
         (None, Some(ed)) => {
             let ed: Option<NaiveDate> = parse_date(ed.as_str());
             let ed: NaiveDate = ed.unwrap();
-            let end_ts = date_to_chrome_time(ed);
+            let end_ts = chrome_time::from_date(ed);
             query.push_str(" AND last_visit_time < ?");
             params_vec.push(Box::new(end_ts));
         },
