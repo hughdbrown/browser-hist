@@ -78,6 +78,79 @@ impl Display for Row {
     }
 }
 
+struct QueryBuilder {
+    conditions: Vec<String>,
+    params: Vec<Box<dyn rusqlite::ToSql>>,
+}
+
+impl QueryBuilder {
+    fn new() -> Self {
+        QueryBuilder {
+            conditions: Vec::new(),
+            params: Vec::new(),
+        }
+    }
+
+    fn date_range(mut self, start: Option<&str>, end: Option<&str>) -> Self {
+        match (start, end) {
+            (Some(start_str), Some(end_str)) => {
+                if let (Some(start_date), Some(end_date)) = (parse_date(start_str), parse_date(end_str)) {
+                    let start_ts = chrome_time::from_date(start_date);
+                    let end_ts = chrome_time::from_date(end_date);
+                    self.conditions.push("last_visit_time BETWEEN ? AND ?".to_string());
+                    self.params.push(Box::new(start_ts));
+                    self.params.push(Box::new(end_ts));
+                }
+            },
+            (Some(start_str), None) => {
+                if let Some(start_date) = parse_date(start_str) {
+                    let start_ts = chrome_time::from_date(start_date);
+                    self.conditions.push("last_visit_time >= ?".to_string());
+                    self.params.push(Box::new(start_ts));
+                }
+            },
+            (None, Some(end_str)) => {
+                if let Some(end_date) = parse_date(end_str) {
+                    let end_ts = chrome_time::from_date(end_date);
+                    self.conditions.push("last_visit_time < ?".to_string());
+                    self.params.push(Box::new(end_ts));
+                }
+            },
+            (None, None) => {},
+        }
+        self
+    }
+
+    fn title_search(mut self, search: Option<&str>) -> Self {
+        if let Some(search_term) = search {
+            self.conditions.push("title LIKE ?".to_string());
+            self.params.push(Box::new(format!("%{}%", search_term)));
+        }
+        self
+    }
+
+    fn url_search(mut self, url: Option<&str>) -> Self {
+        if let Some(url_term) = url {
+            self.conditions.push("url LIKE ?".to_string());
+            self.params.push(Box::new(format!("%{}%", url_term)));
+        }
+        self
+    }
+
+    fn build(self) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
+        let mut query = String::from(BASE_QUERY);
+        
+        for condition in &self.conditions {
+            query.push_str(" AND ");
+            query.push_str(condition);
+        }
+        
+        query.push_str(&format!(" ORDER BY last_visit_time DESC LIMIT {}", QUERY_LIMIT));
+        
+        (query, self.params)
+    }
+}
+
 fn parse_date(s: &str) -> Option<NaiveDate> {
     let date = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
     Some(date)
@@ -123,63 +196,15 @@ fn get_matches() -> ArgMatches {
         .get_matches()
 }
 
-fn build_sql(matches: &ArgMatches)
--> (
-    String,
-    Vec<Box<dyn rusqlite::ToSql>>
-)
-{
-    // Build SQL query
-    let mut query = String::from(BASE_QUERY);
-    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-
-    // Date range
-    let sd: Option<&String> = matches.get_one::<String>("start-date");
-    let ed: Option<&String> = matches.get_one::<String>("end-date");
-    match(sd, ed) {
-        (Some(sd), Some(ed)) => {
-            let sd: Option<NaiveDate> = parse_date(sd.as_str());
-            let sd: NaiveDate = sd.unwrap();
-            let start_ts = chrome_time::from_date(sd);
-            let ed: Option<NaiveDate> = parse_date(ed.as_str());
-            let ed: NaiveDate = ed.unwrap();
-            let end_ts = chrome_time::from_date(ed);
-            query.push_str(" AND last_visit_time BETWEEN ? AND ?");
-            params_vec.push(Box::new(start_ts));
-            params_vec.push(Box::new(end_ts));
-        },
-        (Some(sd), None) => {
-            let sd: Option<NaiveDate> = parse_date(sd.as_str());
-            let sd: NaiveDate = sd.unwrap();
-            let start_ts = chrome_time::from_date(sd);
-            query.push_str(" AND last_visit_time >= ?");
-            params_vec.push(Box::new(start_ts));
-        },
-        (None, Some(ed)) => {
-            let ed: Option<NaiveDate> = parse_date(ed.as_str());
-            let ed: NaiveDate = ed.unwrap();
-            let end_ts = chrome_time::from_date(ed);
-            query.push_str(" AND last_visit_time < ?");
-            params_vec.push(Box::new(end_ts));
-        },
-        (None, None) => {},
-    } 
-
-    // Title search
-    if let Some(search) = matches.get_one::<String>("search") {
-        query.push_str(" AND title LIKE ?");
-        params_vec.push(Box::new(format!("%{}%", search)));
-    }
-
-    // URL/domain search
-    if let Some(url) = matches.get_one::<String>("url") {
-        query.push_str(" AND url LIKE ?");
-        params_vec.push(Box::new(format!("%{}%", url)));
-    }
-
-    query.push_str(&format!(" ORDER BY last_visit_time DESC LIMIT {}", QUERY_LIMIT));
-
-    (query, params_vec)
+fn build_sql(matches: &ArgMatches) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
+    QueryBuilder::new()
+        .date_range(
+            matches.get_one::<String>("start-date").map(|s| s.as_str()),
+            matches.get_one::<String>("end-date").map(|s| s.as_str())
+        )
+        .title_search(matches.get_one::<String>("search").map(|s| s.as_str()))
+        .url_search(matches.get_one::<String>("url").map(|s| s.as_str()))
+        .build()
 }
 
 fn get_rows(
