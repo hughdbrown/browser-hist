@@ -200,15 +200,19 @@ fn print_rows(rows: &[Row]) {
     }
 }
 
-fn main() -> Result<(), CustomError> {
-    let matches: ArgMatches = get_matches();
-    let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = build_sql(&matches);
-
+fn get_history_db() -> PathBuf {
     // Get Chrome history path
     let home: String = std::env::var("HOME").expect("Could not determine home directory");
     let mut history_path: PathBuf = PathBuf::from(home);
     history_path.push("Library/Application Support/Google/Chrome/Default/History");
+    history_path
+}
 
+fn main() -> Result<(), CustomError> {
+    let matches: ArgMatches = get_matches();
+    let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = build_sql(&matches);
+
+    let history_path: PathBuf = get_history_db();
     let temp_file: NamedTempFile = NamedTempFile::new()?;
     fs::copy(history_path, temp_file.path())?;
 
