@@ -1,0 +1,6 @@
+Refactor the extraction from the sqlite database and printing of rows.
+Change the relevant code into two separate routines:
+- one that gets the rows from the database and
+- one that prints the rows with a custom format method.
+Store all the results in the `struct Row` provided in the file.
+Give all of the modified code explicit data type declarations.
