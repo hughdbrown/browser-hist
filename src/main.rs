@@ -22,6 +22,10 @@ use chrono::{
     NaiveDate, NaiveDateTime,
 };
 
+const CHROME_HISTORY_PATH: &str = "Library/Application Support/Google/Chrome/Default/History";
+const QUERY_LIMIT: i32 = 100;
+const BASE_QUERY: &str = "SELECT url, title, visit_count, last_visit_time FROM urls WHERE 1=1";
+
 #[derive(Debug)]
 struct Row {
     url: String,
@@ -117,7 +121,7 @@ fn build_sql(matches: &ArgMatches)
 )
 {
     // Build SQL query
-    let mut query = String::from("SELECT url, title, visit_count, last_visit_time FROM urls WHERE 1=1");
+    let mut query = String::from(BASE_QUERY);
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     // Date range
@@ -164,7 +168,7 @@ fn build_sql(matches: &ArgMatches)
         params_vec.push(Box::new(format!("%{}%", url)));
     }
 
-    query.push_str(" ORDER BY last_visit_time DESC LIMIT 100");
+    query.push_str(&format!(" ORDER BY last_visit_time DESC LIMIT {}", QUERY_LIMIT));
 
     (query, params_vec)
 }
@@ -207,7 +211,7 @@ fn get_history_db() -> PathBuf {
     // Get Chrome history path
     let home: String = std::env::var("HOME").expect("Could not determine home directory");
     let mut history_path: PathBuf = PathBuf::from(home);
-    history_path.push("Library/Application Support/Google/Chrome/Default/History");
+    history_path.push(CHROME_HISTORY_PATH);
     history_path
 }
 
