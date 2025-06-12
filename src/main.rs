@@ -5,9 +5,6 @@ use std::fmt::{
 };
 use std::fs;
 use std::path::PathBuf;
-//use std::fmt::Error;
-// use std::io::Error;
-//use core::error::Error;
 
 use tempfile::NamedTempFile;
 
@@ -15,18 +12,14 @@ use clap::{
     Arg,
     ArgMatches,
     Command,
-    // Parser,
 };
 use rusqlite::{
     Connection,
     Result,
     OpenFlags,
-    // params,
-    // NO_PARAMS,
 };
 use chrono::{
     NaiveDate, NaiveDateTime,
-    // TimeZone, Utc,
 };
 
 #[derive(Debug)]
@@ -75,7 +68,6 @@ fn chrome_time_to_naive(ts: i64) -> NaiveDateTime {
     chrome_epoch + chrono::Duration::microseconds(ts)
 }
 
-// std::error::Error, std::fmt::Display, and std::fmt::Debug
 #[derive(Debug)]
 enum CustomError {
     Rus(rusqlite::Error),
