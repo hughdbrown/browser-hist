@@ -81,6 +81,7 @@ impl Display for Row {
 struct QueryBuilder {
     conditions: Vec<String>,
     params: Vec<Box<dyn rusqlite::ToSql>>,
+    limit: Option<String>,
 }
 
 impl QueryBuilder {
@@ -88,6 +89,7 @@ impl QueryBuilder {
         QueryBuilder {
             conditions: Vec::new(),
             params: Vec::new(),
+            limit: None,
         }
     }
 
@@ -131,6 +133,12 @@ impl QueryBuilder {
         self
     }
 
+    fn limit(mut self, limit: Option<&str>) -> Self {
+        if let Some(limit_term) = limit {
+            self.limit = format!(" LIMIT {}", limit_term).into();
+        }
+        self
+    }
     fn build(self) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
         let mut query = String::from(BASE_QUERY);
         
@@ -139,7 +147,10 @@ impl QueryBuilder {
             query.push_str(condition);
         }
         
-        query.push_str(&format!(" ORDER BY last_visit_time DESC LIMIT {}", QUERY_LIMIT));
+        query.push_str(" ORDER BY last_visit_time DESC");
+        if let Some(limit) = self.limit {
+            query.push_str(&limit);
+        }
         
         (query, self.params)
     }
@@ -187,6 +198,10 @@ fn get_matches() -> ArgMatches {
             .long("url")
             .short('u')
             .help("Domain or text to search for in the URL"))
+        .arg(Arg::new("limit")
+            .long("limit")
+            .short('l')
+            .help("Limit number of matches"))
         .get_matches()
 }
 
@@ -198,6 +213,7 @@ fn build_sql(matches: &ArgMatches) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
         )
         .title_search(matches.get_one::<String>("search").map(|s| s.as_str()))
         .url_search(matches.get_one::<String>("url").map(|s| s.as_str()))
+        .limit(matches.get_one::<String>("limit").map(|s| s.as_str()))
         .build()
 }
 
