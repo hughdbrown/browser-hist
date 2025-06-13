@@ -222,10 +222,10 @@ fn get_rows(
     
     stmt.query_map(params.as_slice(), |row| {
         Ok(Row::new(
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, i32>(2)?,
-            row.get::<_, i64>(3)?,
+            row.get::<_, String>("url")?,
+            row.get::<_, String>("title")?,
+            row.get::<_, i32>("visit_count")?,
+            row.get::<_, i64>("last_visit_time")?,
         ))
     })?.collect::<Result<Vec<_>, _>>()
         .map_err(BrowserHistError::from)
