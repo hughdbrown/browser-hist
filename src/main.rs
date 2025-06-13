@@ -6,6 +6,7 @@ use std::fmt::{
 use std::fs;
 use std::path::PathBuf;
 
+use dirs;
 use tempfile::NamedTempFile;
 
 use clap::{
@@ -23,7 +24,6 @@ use chrono::{
 };
 
 const CHROME_HISTORY_PATH: &str = "Library/Application Support/Google/Chrome/Default/History";
-const QUERY_LIMIT: i32 = 100;
 const BASE_QUERY: &str = "SELECT url, title, visit_count, last_visit_time FROM urls WHERE 1=1";
 
 mod chrome_time {
@@ -78,6 +78,7 @@ impl Display for Row {
     }
 }
 
+#[derive(Default)]
 struct QueryBuilder {
     conditions: Vec<String>,
     params: Vec<Box<dyn rusqlite::ToSql>>,
@@ -86,11 +87,7 @@ struct QueryBuilder {
 
 impl QueryBuilder {
     fn new() -> Self {
-        QueryBuilder {
-            conditions: Vec::new(),
-            params: Vec::new(),
-            limit: None,
-        }
+        Self::default()
     }
 
 
@@ -242,11 +239,9 @@ fn print_rows(rows: &[Row]) {
 }
 
 fn get_history_db() -> PathBuf {
-    // Get Chrome history path
-    let home: String = std::env::var("HOME").expect("Could not determine home directory");
-    let mut history_path: PathBuf = PathBuf::from(home);
-    history_path.push(CHROME_HISTORY_PATH);
-    history_path
+    dirs::home_dir()
+        .expect("Could not determine home directory")
+        .join(CHROME_HISTORY_PATH)
 }
 
 fn main() -> Result<(), BrowserHistError> {
