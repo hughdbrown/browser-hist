@@ -91,30 +91,24 @@ impl QueryBuilder {
         }
     }
 
+
     fn date_range(mut self, start: Option<&str>, end: Option<&str>) -> Self {
-        match (start, end) {
-            (Some(start_str), Some(end_str)) => {
-                if let (Some(start_date), Some(end_date)) = (parse_date(start_str), parse_date(end_str)) {
-                    let start_ts = chrome_time::from_date(start_date);
-                    let end_ts = chrome_time::from_date(end_date);
-                    self.conditions.push("last_visit_time BETWEEN ? AND ?".to_string());
-                    self.params.push(Box::new(start_ts));
-                    self.params.push(Box::new(end_ts));
-                }
+        fn get_chrome_date(date_str: Option<&str>) -> Option<i64> {
+            date_str.and_then(parse_date).map(chrome_time::from_date)
+        }
+        match (get_chrome_date(start), get_chrome_date(end)) {
+            (Some(start_ts), Some(end_ts)) => {
+                self.conditions.push("last_visit_time BETWEEN ? AND ?".to_string());
+                self.params.push(Box::new(start_ts));
+                self.params.push(Box::new(end_ts));
             },
-            (Some(start_str), None) => {
-                if let Some(start_date) = parse_date(start_str) {
-                    let start_ts = chrome_time::from_date(start_date);
-                    self.conditions.push("last_visit_time >= ?".to_string());
-                    self.params.push(Box::new(start_ts));
-                }
+            (Some(start_ts), None) => {
+                self.conditions.push("last_visit_time >= ?".to_string());
+                self.params.push(Box::new(start_ts));
             },
-            (None, Some(end_str)) => {
-                if let Some(end_date) = parse_date(end_str) {
-                    let end_ts = chrome_time::from_date(end_date);
-                    self.conditions.push("last_visit_time < ?".to_string());
-                    self.params.push(Box::new(end_ts));
-                }
+            (None, Some(end_ts)) => {
+                self.conditions.push("last_visit_time < ?".to_string());
+                self.params.push(Box::new(end_ts));
             },
             (None, None) => {},
         }
