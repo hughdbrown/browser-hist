@@ -1,8 +1,3 @@
-//use std::error::Error as StdError;
-use std::fmt::{
-    Display,
-    Debug,
-};
 use std::fs;
 use std::path::PathBuf;
 
@@ -16,167 +11,20 @@ use clap::{
 };
 use rusqlite::{
     Connection,
-    Result,
     OpenFlags,
 };
-use chrono::{
-    NaiveDate, NaiveDateTime,
-};
+
+mod chrome_time;
+mod query_builder;
+mod row;
+mod browser_hist_error;
+
+use query_builder::QueryBuilder;
+use row::Row;
+use browser_hist_error::BrowserHistError;
 
 const CHROME_HISTORY_PATH: &str = "Library/Application Support/Google/Chrome/Default/History";
-const BASE_QUERY: &str = "SELECT url, title, visit_count, last_visit_time FROM urls WHERE 1=1";
 
-mod chrome_time {
-    use chrono::{NaiveDate, NaiveDateTime};
-
-    /// Chrome epoch: 1601-01-01T00:00:00Z
-    const CHROME_EPOCH: NaiveDateTime = match NaiveDate::from_ymd_opt(1601, 1, 1) {
-        Some(date) => match date.and_hms_opt(0, 0, 0) {
-            Some(datetime) => datetime,
-            None => panic!("Invalid time"),
-        },
-        None => panic!("Invalid date"),
-    };
-
-    /// Converts a chrono NaiveDate to Chrome's timestamp (microseconds since 1601-01-01T00:00:00Z)
-    pub fn from_date(date: NaiveDate) -> i64 {
-        let duration = date.and_hms_opt(0, 0, 0).unwrap() - CHROME_EPOCH;
-        duration.num_microseconds().unwrap()
-    }
-
-    /// Converts Chrome's timestamp to chrono NaiveDateTime
-    pub fn to_datetime(ts: i64) -> NaiveDateTime {
-        CHROME_EPOCH + chrono::Duration::microseconds(ts)
-    }
-}
-
-#[derive(Debug)]
-struct Row {
-    url: String,
-    title: String,
-    visit_count: i32,
-    last_visit_time: i64,
-}
-
-impl Row {
-    fn new(url: String, title: String, visit_count: i32, last_visit_time: i64) -> Self {
-        Self { url, title, visit_count, last_visit_time }
-    }
-}
-
-impl Display for Row {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let dt: NaiveDateTime = chrome_time::to_datetime(self.last_visit_time);
-        write!(
-            f,
-            "[{}] {} ({} visits)\n    {}",
-            dt.format("%Y-%m-%d %H:%M:%S"),
-            self.title,
-            self.visit_count,
-            self.url
-        )
-    }
-}
-
-#[derive(Default)]
-struct QueryBuilder {
-    conditions: Vec<String>,
-    params: Vec<Box<dyn rusqlite::ToSql>>,
-    limit: Option<String>,
-}
-
-impl QueryBuilder {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn add_condition<T>(&mut self, condition: &str, params: &[T])
-        where T: rusqlite::ToSql + Clone + 'static
-    {
-        self.conditions.push(condition.to_string());
-        for param in params {
-            self.params.push(Box::new(param.clone()));
-        }
-    }
-
-    fn date_range(mut self, start: Option<&str>, end: Option<&str>) -> Self {
-        fn get_chrome_date(date_str: Option<&str>) -> Option<i64> {
-            date_str.and_then(parse_date).map(chrome_time::from_date)
-        }
-        match (get_chrome_date(start), get_chrome_date(end)) {
-            (Some(start_ts), Some(end_ts)) => {
-                self.add_condition("last_visit_time BETWEEN ? AND ?", &[start_ts, end_ts]);
-            },
-            (Some(start_ts), None) => {
-                self.add_condition("last_visit_time >= ?", &[start_ts]);
-            },
-            (None, Some(end_ts)) => {
-                self.add_condition("last_visit_time < ?", &[end_ts]);
-            },
-            (None, None) => {},
-        }
-        self
-    }
-
-    fn title_search(mut self, search: Option<&str>) -> Self {
-        if let Some(term) = search {
-            self.add_condition("title LIKE ?", &[format!("%{}%", term)]);
-        }
-        self
-    }
-
-    fn url_search(mut self, url: Option<&str>) -> Self {
-        if let Some(term) = url {
-            self.add_condition("url LIKE ?", &[format!("%{}%", term)]);
-        }
-        self
-    }
-
-    fn limit(mut self, limit: Option<&str>) -> Self {
-        if let Some(limit_term) = limit {
-            self.limit = Some(format!(" LIMIT {}", limit_term));
-        }
-        self
-    }
-    fn build(self) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
-        let mut query = String::from(BASE_QUERY);
-
-        for condition in &self.conditions {
-            query.push_str(" AND ");
-            query.push_str(condition);
-        }
-        
-        query.push_str(" ORDER BY last_visit_time DESC");
-        if let Some(limit) = self.limit {
-            query.push_str(&limit);
-        }
-        
-        (query, self.params)
-    }
-}
-
-fn parse_date(s: &str) -> Option<NaiveDate> {
-    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
-}
-
-
-#[derive(Debug)]
-enum BrowserHistError {
-    Rus(rusqlite::Error),
-    Io(std::io::Error),
-}
-
-impl From<std::io::Error> for BrowserHistError {
-    fn from(err: std::io::Error) -> Self {
-        BrowserHistError::Io(err)
-    }
-}
-
-impl From<rusqlite::Error> for BrowserHistError {
-    fn from(err: rusqlite::Error) -> Self {
-        BrowserHistError::Rus(err)
-    }
-}
 
 fn get_matches() -> ArgMatches {
     Command::new("chrome-history-search")
