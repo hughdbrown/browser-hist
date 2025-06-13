@@ -60,7 +60,7 @@ struct Row {
 
 impl Row {
     fn new(url: String, title: String, visit_count: i32, last_visit_time: i64) -> Self {
-        Row { url, title, visit_count, last_visit_time }
+        Self { url, title, visit_count, last_visit_time }
     }
 }
 
