@@ -135,13 +135,13 @@ impl QueryBuilder {
 
     fn limit(mut self, limit: Option<&str>) -> Self {
         if let Some(limit_term) = limit {
-            self.limit = format!(" LIMIT {}", limit_term).into();
+            self.limit = Some(format!(" LIMIT {}", limit_term));
         }
         self
     }
     fn build(self) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
         let mut query = String::from(BASE_QUERY);
-        
+
         for condition in &self.conditions {
             query.push_str(" AND ");
             query.push_str(condition);
@@ -157,26 +157,25 @@ impl QueryBuilder {
 }
 
 fn parse_date(s: &str) -> Option<NaiveDate> {
-    let date = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
-    Some(date)
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
 }
 
 
 #[derive(Debug)]
-enum CustomError {
+enum BrowserHistError {
     Rus(rusqlite::Error),
     Io(std::io::Error),
 }
 
-impl From<std::io::Error> for CustomError {
+impl From<std::io::Error> for BrowserHistError {
     fn from(err: std::io::Error) -> Self {
-        CustomError::Io(err)
+        BrowserHistError::Io(err)
     }
 }
 
-impl From<rusqlite::Error> for CustomError {
+impl From<rusqlite::Error> for BrowserHistError {
     fn from(err: rusqlite::Error) -> Self {
-        CustomError::Rus(err)
+        BrowserHistError::Rus(err)
     }
 }
 
@@ -221,28 +220,19 @@ fn get_rows(
     conn: &Connection,
     query: &str,
     params_vec: &[Box<dyn rusqlite::ToSql>]
-) -> Result<Vec<Row>, CustomError> {
-    let mut stmt: rusqlite::Statement = conn.prepare(query)?;
+) -> Result<Vec<Row>, BrowserHistError> {
+    let mut stmt = conn.prepare(query)?;
     let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| &**b).collect();
-    let row_iter = stmt.query_map(
-        params.as_slice(),
-        |row| {
-            Ok(Row::new(
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i32>(2)?,
-                row.get::<_, i64>(3)?,
-            ))
-        }
-    )?;
-
-    let mut rows: Vec<Row> = Vec::new();
-    for row_result in row_iter {
-        let row: Row = row_result?;
-        rows.push(row);
-    }
-
-    Ok(rows)
+    
+    stmt.query_map(params.as_slice(), |row| {
+        Ok(Row::new(
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, i32>(2)?,
+            row.get::<_, i64>(3)?,
+        ))
+    })?.collect::<Result<Vec<_>, _>>()
+        .map_err(BrowserHistError::from)
 }
 
 fn print_rows(rows: &[Row]) {
@@ -259,7 +249,7 @@ fn get_history_db() -> PathBuf {
     history_path
 }
 
-fn main() -> Result<(), CustomError> {
+fn main() -> Result<(), BrowserHistError> {
     let matches: ArgMatches = get_matches();
     let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = build_sql(&matches);
 
