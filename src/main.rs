@@ -90,6 +90,10 @@ impl QueryBuilder {
         Self::default()
     }
 
+    fn add_condition(&mut self, condition: &str, param: impl rusqlite::ToSql + 'static) {
+        self.conditions.push(condition.to_string());
+        self.params.push(Box::new(param));
+    }
 
     fn date_range(mut self, start: Option<&str>, end: Option<&str>) -> Self {
         fn get_chrome_date(date_str: Option<&str>) -> Option<i64> {
@@ -97,17 +101,14 @@ impl QueryBuilder {
         }
         match (get_chrome_date(start), get_chrome_date(end)) {
             (Some(start_ts), Some(end_ts)) => {
-                self.conditions.push("last_visit_time BETWEEN ? AND ?".to_string());
-                self.params.push(Box::new(start_ts));
+                self.add_condition("last_visit_time BETWEEN ? AND ?", start_ts);
                 self.params.push(Box::new(end_ts));
             },
             (Some(start_ts), None) => {
-                self.conditions.push("last_visit_time >= ?".to_string());
-                self.params.push(Box::new(start_ts));
+                self.add_condition("last_visit_time >= ?", start_ts);
             },
             (None, Some(end_ts)) => {
-                self.conditions.push("last_visit_time < ?".to_string());
-                self.params.push(Box::new(end_ts));
+                self.add_condition("last_visit_time < ?", end_ts);
             },
             (None, None) => {},
         }
@@ -115,17 +116,15 @@ impl QueryBuilder {
     }
 
     fn title_search(mut self, search: Option<&str>) -> Self {
-        if let Some(search_term) = search {
-            self.conditions.push("title LIKE ?".to_string());
-            self.params.push(Box::new(format!("%{}%", search_term)));
+        if let Some(term) = search {
+            self.add_condition("title LIKE ?", format!("%{}%", term));
         }
         self
     }
 
     fn url_search(mut self, url: Option<&str>) -> Self {
-        if let Some(url_term) = url {
-            self.conditions.push("url LIKE ?".to_string());
-            self.params.push(Box::new(format!("%{}%", url_term)));
+        if let Some(term) = url {
+            self.add_condition("url LIKE ?", format!("%{}%", term));
         }
         self
     }
